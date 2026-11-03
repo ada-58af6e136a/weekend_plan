@@ -31,7 +31,7 @@ const THEMES=[
   {k:'rain',indoor:true,seq:[['am',['exhibit']],['lunch'],['pm',['exhibit','market','show']],['dinner',null,1],['eve',['show'],1]]},
   {k:'likes',seq:[['am','LIKES'],['lunch'],['pm','LIKES'],['dinner',null,1],['eve','LIKES',1]]},
   {k:'cheap',cheap:true,seq:[['am',['walk','exhibit']],['lunch'],['pm',['walk','market','exhibit']]]},
-  {k:'outdoor',seq:[['am',['hike','walk']],['lunch'],['pm',['walk','market','hike']]]},
+  {k:'outdoor',seq:[['am',['hike','walk']],['lunch'],['pm',['walk','market','hike'],1]]},
   {k:'party',seq:[['pm',['show','market']],['dinner'],['eve',['market','show','walk'],1]]},
   {k:'solo',seq:[['am',['exhibit']],['lunch'],['pm',['walk','exhibit','market']]]}
 ];
@@ -90,6 +90,7 @@ function buildPlan(theme,prefs,seen){
       if(SLOTS[slot].meal&&prev)stops.push({aid:'meal',slot,area:prev,opt:!!opt});
       continue;
     }
+    if(SLOTS[slot].meal&&prev&&legOf(prefs.city,prev,c[0].a.area).min>40){stops.push({aid:'meal',slot,area:prev,opt:!!opt});continue;}
     const a=c[0].a;used.add(a.id);prev=a.area;
     stops.push({aid:a.id,slot,area:a.area,opt:!!opt});
   }
@@ -100,22 +101,34 @@ function buildPlan(theme,prefs,seen){
   recalc(plan,prefs);
   // 超预算时，先去掉可选的尾部站点
   while(prefs.budget<UNLIMITED&&plan.cost.total>prefs.budget&&plan.stops.length>2&&plan.stops[plan.stops.length-1].opt){plan.stops.pop();recalc(plan,prefs);}
-  while(plan.hours>9&&plan.stops.length>2&&plan.stops[plan.stops.length-1].opt){plan.stops.pop();recalc(plan,prefs);}
-  const last=()=>plan.stops[plan.stops.length-1];
-  while(plan.stops.length>1&&(last().slot==='lunch'||last().aid==='meal')){plan.stops.pop();recalc(plan,prefs);}
+  // 太长（>9 小时）或结束太晚（>22:30）时，去掉可选的尾部站点
+  while((plan.hours>9||plan.endMin>toMin('22:30'))&&plan.stops.length>2&&plan.stops[plan.stops.length-1].opt){plan.stops.pop();recalc(plan,prefs);}
+  // 去掉孤立在结尾的饭点；长活动（如徒步）后的午饭保留
+  const last=()=>plan.stops[plan.stops.length-1],prevDur=()=>actOf(plan.stops[plan.stops.length-2]).dur;
+  while(plan.stops.length>1&&((last().slot==='lunch'&&prevDur()<4)||(last().slot==='dinner'&&last().aid==='meal'))){plan.stops.pop();recalc(plan,prefs);}
   return plan;
 }
 
 // 重新计算交通、花费、天气提醒、得分、理由、标题
+const toMin=t=>{const [h,m]=t.split(':');return h*60+ +m;};
+const toHM=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 function recalc(plan,prefs){
   const acts=plan.stops.map(actOf);
   plan.legs=acts.slice(1).map((a,i)=>legOf(plan.city,acts[i].area,a.area));
+  // 往返交通：按从市中心出发估算（区域坐标原点）
+  plan.go=legOf(plan.city,null,acts[0].area);plan.back=legOf(plan.city,acts[acts.length-1].area,null);
+  // 时间轴：不早于时段开始，且不早于上一站结束 + 路程，避免长活动和下一站重叠
+  let t=0,t0=0;
+  plan.stops.forEach((s,i)=>{const a=acts[i],open=a.t==='hike'?toMin('08:30'):toMin(SLOTS[s.slot].s);
+    const st=i?Math.max(open,Math.ceil((t+plan.legs[i-1].min)/5)*5):open,en=st+a.dur*60;
+    if(!i)t0=st;s.start=toHM(st);s.end=toHM(en);t=en;
+    s.warn=a.t!=='food'&&!a.in&&isBad(wxOf(plan.city,plan.day,s.slot));});
   const ticket=acts.filter(a=>a.t!=='food').reduce((x,a)=>x+a.p,0);
   const food=acts.filter(a=>a.t==='food').reduce((x,a)=>x+a.p,0);
-  const transport=plan.legs.reduce((x,l)=>x+l.cost,0);
+  const transport=plan.legs.reduce((x,l)=>x+l.cost,0)+plan.go.cost+plan.back.cost;
   plan.cost={ticket,food,transport,total:Math.round(ticket+food+transport)};
-  plan.hours=Math.round((acts.reduce((x,a)=>x+a.dur,0)+plan.legs.reduce((x,l)=>x+l.min,0)/60)*2)/2;
-  plan.stops.forEach((s,i)=>{const a=acts[i];s.warn=a.t!=='food'&&!a.in&&isBad(wxOf(plan.city,plan.day,s.slot));});
+  plan.endMin=t;
+  plan.hours=Math.round((t-t0+plan.go.min+plan.back.min)/30)/2;
   scorePlan(plan,prefs,acts);
   return plan;
 }
@@ -147,7 +160,9 @@ function scorePlan(plan,prefs,acts){
   }
   R.push(unl?`💰 人均 ¥${total}（含门票、交通、餐饮）`:total<=prefs.budget?`💰 人均 ¥${total}（含交通餐饮），比预算省 ¥${prefs.budget-total}`:`💰 人均 ¥${total}，超出预算 ¥${total-prefs.budget}，可以换掉最贵的一站`);
   const lack=main.map(s=>actOf(s)).filter(a=>P<a.min);
+  const many=main.map(s=>actOf(s)).filter(a=>P>a.max);
   if(lack.length)R.push(`👥「${lack[0].n}」至少 ${lack[0].min} 人，可以去组局里拉人`);
+  else if(many.length)R.push(`👥「${many[0].n}」建议不超过 ${many[0].max} 人，${P} 人可以分两组`);
   else if(acts.some(a=>a.min>=5))R.push(`👥 ${P} 人刚好凑一车`);
   else R.push(P===1?'👤 每一站都适合一个人去':`👥 每一站都适合 ${P} 人同行`);
   const liked=[...new Set(acts.filter(a=>prefs.likes.includes(a.t)).map(a=>TYPES[a.t][0]))];
@@ -168,7 +183,7 @@ function scorePlan(plan,prefs,acts){
   const tags=[];
   if(badSlots.length&&!warns)tags.push('雨天友好');
   if(total===0)tags.push('0元');else if(!unl&&total<=prefs.budget)tags.push('预算内');
-  if(!lack.length)tags.push(P===1?'一个人OK':`适合${P}人`);
+  if(!lack.length&&!many.length)tags.push(P===1?'一个人OK':`适合${P}人`);
   if(acts.some(a=>a.book))tags.push('需预约');
   plan.tags=tags;
 }
@@ -183,7 +198,7 @@ function generatePlans(prefs){
     sigs.add(sig);out.push(p);p.stops.forEach(s=>seen[s.aid]=(seen[s.aid]||0)+1);
     if(out.length===3)break;
   }
-  return out;
+  return out.sort((a,b)=>b.match-a.match);
 }
 
 // 换一站：同时段按得分轮换
@@ -249,7 +264,8 @@ function planDiff(oldP,newP,m){
     if(SLOTS[s.slot].meal)return '跟着路线调整';
     if(oldP.day!==m.day)return '改到大家都有空的'+weekendDates()[m.day].label;
     if(!m.slots.includes(s.slot))return SLOTS[s.slot].n+'不是所有人都有空';
-    if(a.p>m.budget*0.6)return '超出共同预算 ¥'+m.budget;
+    if(a.p>m.budget)return '超出共同预算 ¥'+m.budget;
+    if(a.p>m.budget*0.6)return '单站 ¥'+a.p+'，占了共同预算 ¥'+m.budget+' 的大半';
     return '有更合适的选择';};
   return {removed:oldP.stops.filter(s=>!nIds.includes(s.aid)).map(s=>({n:actOf(s).n,why:why(s)})),
           added:newP.stops.filter(s=>!oIds.includes(s.aid)).map(s=>actOf(s).n),before:oldP.cost.total,after:newP.cost.total};
