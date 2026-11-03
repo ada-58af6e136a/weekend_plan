@@ -216,3 +216,9 @@ nav a.on i{filter:none;opacity:1}
 .timeline img{width:56px;height:56px;object-fit:cover;border-radius:10px;flex:none}
 .timeline .emo{width:56px;height:56px;font-size:26px}
 .stars{color:#f5a623}
+
+/* ---------- 分享卡片 / 首访引导 ---------- */
+a.btn{text-decoration:none;text-align:center;display:inline-block}
+.share-img{width:100%;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);display:block;margin:10px 0 8px}
+.coach{background:var(--ink);color:#fff;font-size:12px;border-radius:10px;padding:8px 12px;margin-bottom:10px;position:relative;animation:pop .35s}
+.coach:after{content:'';position:absolute;left:24px;bottom:-6px;border:6px solid transparent;border-bottom:0;border-top-color:var(--ink)}

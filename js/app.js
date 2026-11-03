@@ -47,7 +47,7 @@ function renderHome(){
   const d=ws[P.day],bad=['am','pm','eve'].filter(k=>isBad(d[k]));
   $('#headline').innerHTML=`<div class="meta">${CITIES[P.city].name} · ${WD[P.day].label} ${WD[P.day].date} · ${bad.length?`${bad.map(k=>SLOTS[k].n).join('、')}${d[bad[0]].w}（${d[bad[0]].rain}%）`:`${d.pm.w} ${d.am.t}~${d.pm.t}°C`}</div>
     <h2>${PLANS.length?`${bad.length?'有雨也不怕，':''}为你准备了 ${PLANS.length} 套方案`:'没有找到合适的方案'}</h2>`;
-  $('#plans').innerHTML=PLANS.length?PLANS.map(planCard).join(''):`<div class="card empty">条件有点严格，试试放宽预算或兴趣<br><br><button class="btn pri" onclick="openCond()">调整条件</button></div>`;
+  $('#plans').innerHTML=PLANS.length?(S.onboarded?'':'<div class="coach" id="coach">👇 点开最推荐的方案，看看时间轴、花费拆分和雨天备选</div>')+PLANS.map(planCard).join(''):`<div class="card empty">条件有点严格，试试放宽预算或兴趣<br><br><button class="btn pri" onclick="openCond()">调整条件</button></div>`;
   renderLib();
 }
 function renderLib(){
@@ -85,7 +85,7 @@ window.setPref=(k,v,live)=>{const P=S.prefs;
   else openCond();};
 
 // ---------- 方案详情 ----------
-window.openPlan=i=>{CUR={plan:PLANS[i],ctx:'home'};renderPlanSheet();};
+window.openPlan=i=>{if(!S.onboarded){S.onboarded=true;save();const h=$('#coach');h&&h.remove();}CUR={plan:PLANS[i],ctx:'home'};renderPlanSheet();};
 window.openTeamPlan=tid=>{const t=S.teams.find(x=>x.id===tid);CUR={plan:t.plan,ctx:'team',tid};renderPlanSheet();};
 function curPrefs(){
   if(CUR.ctx==='team'){const t=S.teams.find(x=>x.id===CUR.tid),m=mergePrefs(t.members,t.plan.city);
@@ -163,7 +163,8 @@ function memberRow(t,m){
 }
 function mergeBox(t,m,stale){
   return `<div class="merge"><div class="mh">🤝 偏好合并结果 <span class="meta">${m.n}/${m.total} 人已填</span></div>
-  <div class="ml">🕒 ${m.slots.length?`${m.partial?'没有全员都有空的时段，选了人最多的':'全员都有空'}：<b>${m.slots.map(s=>skLabel(m.day+'_'+s)).join('、')}</b>${m.absent.length?`（${m.absent.join('、')} 来不了）`:''}`:'大家的时间完全错开了，建议换个周末'}</div>
+  <div class="ml">🕒 ${!m.slots.length||(m.partial&&m.cover<=1)?'大家的时间完全错开了，没有两个人能凑到一起，建议调整时间或换个周末'
+    :`${m.partial?`没有全员都有空的时段，选了人最多的（${m.cover}/${m.n} 人）`:'全员都有空'}：<b>${m.slots.map(s=>skLabel(m.day+'_'+s)).join('、')}</b>${m.absent.length?`（${m.absent.join('、')} 来不了）`:''}`}</div>
   <div class="ml">💰 预算按最低的 <b>¥${m.budget}</b> 来（照顾 ${m.poorest}）</div>
   <div class="ml">❤️ ${m.votes.map(([k,v])=>`${TYPES[k][0]} <b>${v}</b>票`).join(' · ')}</div>
   ${m.avoid.length?`<div class="ml">🚫 一票否决：${m.avoid.map(x=>`${AVOIDS[x.k]}（${x.by.join('、')}）`).join('、')}</div>`:''}
@@ -176,7 +177,7 @@ function diffBox(d){
 }
 function teamCard(t){
   const m=mergePrefs(t.members,t.plan.city),p=t.plan,n=t.members.length,filled=t.members.filter(x=>x.filled).length;
-  const sig=m?JSON.stringify(m.prefs):'',stale=m&&m.n>=2&&t.sig!==sig&&m.slots.length;
+  const sig=m?JSON.stringify(m.prefs):'',stale=m&&m.n>=2&&t.sig!==sig&&m.slots.length&&!(m.partial&&m.cover<=1);
   const first=p.stops[0],fa=actOf(first),warns=p.stops.filter(s=>s.warn).length,day=WEATHER[p.city][p.day];
   const wxNote=warns?`⚠️ 有 ${warns} 站会淋雨`:['am','pm','eve'].some(k=>isBad(day[k]))?'☔ 有雨，路线全程室内':'☀️ 天气不错';
   return `<div class="card team" id="team-${t.id}">
@@ -284,7 +285,9 @@ function renderGuides(){
 window.useGuide=id=>{const g=allGuides().find(x=>x.id===id);const p=planFromStops(g.stops,S.prefs,g.title.replace(/！.*$/,''));
   PLANS.unshift(p);PLANS=PLANS.slice(0,4);go('plan');setTimeout(()=>openPlan(0),50);toast('已套用为方案，可以继续调整');};
 window.like=id=>{S.liked.includes(id)?S.liked=S.liked.filter(x=>x!==id):S.liked.push(id);save();renderGuides();};
-window.shareGuide=id=>{const g=allGuides().find(x=>x.id===id);copy(`📍${g.title}\n\n${g.body}\n\n${g.tags.map(t=>'#'+t).join(' ')}\n—— 来自「周末有方」${location.href.split('#')[0]}`);};
+const guideText=g=>`📍${g.title}\n\n${g.body}\n\n${g.tags.map(t=>'#'+t).join(' ')}\n—— 来自「周末有方」${location.href.split('#')[0]}`;
+window.shareGuide=id=>{const g=allGuides().find(x=>x.id===id);
+  if(g.card)openShare(g.card,guideText(g));else if(g.stops&&g.stops.length)openShare(cardFromGuide(g),guideText(g));else copy(guideText(g));};
 window.delGuide=id=>{S.myGuides=S.myGuides.filter(x=>x.id!==id);save();renderGuides();};
 window.genGuide=()=>{const ap=S.activePlan;
   let c=(ap?S.checks.filter(x=>x.planId===ap.id):[]);if(!c.length)c=S.checks.filter(x=>x.city===S.prefs.city);
@@ -295,12 +298,67 @@ window.genGuide=()=>{const ap=S.activePlan;
   window._g={city,title,body,types,stops:c.filter(x=>x.aid&&x.aid!=='meal').map(x=>x.aid),checks:c};
   openSheet(`<div class="sheet-hd"><h2>📝 我的攻略</h2><button class="x" onclick="closeSheet()">✕</button></div>
   <div class="field"><label>标题</label><input id="gT" value="${esc(title)}"></div><div class="field"><label>正文（可修改）</label><textarea id="gB" rows="8">${esc(body)}</textarea></div>
-  <div class="sheet-cta"><button class="btn pri grow" id="gPub">发布到同城攻略</button><button class="btn ghost" id="gCopy">复制文案</button></div>`);
+  <div class="sheet-cta"><button class="btn pri grow" id="gPub">发布并生成分享卡片</button><button class="btn ghost" id="gCopy">复制文案</button></div>`);
   $('#gCopy').onclick=()=>copy($('#gT').value+'\n\n'+$('#gB').value+'\n\n'+types.map(t=>'#'+t).join(' '));
-  $('#gPub').onclick=()=>{const G=window._g;S.myGuides.unshift({id:'m'+Date.now(),city:G.city,au:'我',title:$('#gT').value,body:$('#gB').value,stops:G.stops,likes:0,t:0,tags:[...G.types,CITIES[G.city].name],mine:true});
-    S.prefs.city=G.city;regen();save();closeSheet();renderGuides();toast('已发布，同城同学可以一键套用你的路线');};
+  $('#gPub').onclick=()=>{const G=window._g,g={id:'m'+Date.now(),city:G.city,au:'我',title:$('#gT').value,body:$('#gB').value,stops:G.stops,likes:0,t:0,tags:[...G.types,CITIES[G.city].name],mine:true};
+    g.card=cardFromChecks(G,g.title);S.myGuides.unshift(g);
+    S.prefs.city=G.city;regen();save();renderGuides();openShare(g.card,guideText(g));toast('已发布，同城同学可以一键套用你的路线');};
 };
 $('#genGuide').onclick=()=>genGuide();
+
+// ---------- 分享卡片：护照风，Canvas 绘制，预览和保存用同一张图 ----------
+function cardFromChecks(G,title){const c=G.checks,n=c.length,w=c[0].with||[];
+  return {city:CITIES[G.city].name,date:String(c[c.length-1].date).replace(/\//g,'.'),title,author:'我',quote:(c.find(x=>x.note)||{}).note||'',
+    items:c.map(x=>({emoji:TYPES[x.type][1],bg:TYPES[x.type][2],name:x.name,meta:`${x.area||TYPES[x.type][0]} · ¥${x.cost}`,right:'★'.repeat(x.star)})),
+    stats:[['¥'+c.reduce((s,x)=>s+x.cost,0),'人均花费'],[n+' 站','打卡'],w.length?[(w.length+1)+' 人','同行']:['★'+(c.reduce((s,x)=>s+x.star,0)/n).toFixed(1),'平均评分']]};}
+function cardFromGuide(g){const p=planFromStops(g.stops,S.prefs,g.title);
+  return {city:CITIES[g.city].name,date:g.t?g.t+' 天前发布':'刚刚发布',title:g.title,author:g.au,quote:'',
+    items:p.stops.map(s=>{const a=actOf(s);return {emoji:TYPES[a.t][1],bg:TYPES[a.t][2],name:a.n,meta:`${s.start} · ${a.area} · ${money(a.p)}`};}),
+    stats:[['¥'+p.cost.total,'人均花费'],[p.stops.length+' 站','约 '+p.hours+' 小时'],['❤ '+(g.likes+(S.liked.includes(g.id)?1:0)),'同学点赞']]};}
+function fitText(x,t,w){if(x.measureText(t).width<=w)return t;while(t&&x.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…';}
+function wrapText(x,t,w){const out=[];let l='';for(const ch of t){if(x.measureText(l+ch).width>w&&l){out.push(l);l=ch;}else l+=ch;}if(l)out.push(l);return out;}
+function makeCard(d){
+  const W=600,P=40,RH=76,F='-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',C='#ff6a3d';
+  const c=document.createElement('canvas'),x=c.getContext('2d');
+  x.font=`700 30px ${F}`;const tl=wrapText(x,d.title,W-P*2).slice(0,2);
+  const top=150+tl.length*40,H=top+d.items.length*RH+(d.quote?56:0)+210;
+  c.width=W*2;c.height=H*2;x.scale(2,2);
+  x.fillStyle='#fbf8f1';x.fillRect(0,0,W,H);
+  x.strokeStyle='#f1ebdd';x.lineWidth=1;for(let y=30;y<H;y+=26){x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke();}
+  x.fillStyle=C;x.fillRect(0,0,W,10);
+  x.fillStyle='#6b6f76';x.font=`500 15px ${F}`;x.fillText('周末有方 · 城市探索护照',P,50);
+  x.textAlign='right';x.fillText(d.date,W-P,50);x.textAlign='left';
+  x.fillStyle='#1f2328';x.font=`800 54px ${F}`;x.fillText(d.city,P,116);
+  x.font=`700 28px ${F}`;tl.forEach((l,i)=>x.fillText(l,P,160+i*40));
+  let y=top;
+  d.items.forEach((it,i)=>{const cy=y+RH/2;
+    if(i<d.items.length-1){x.strokeStyle='#d6cdb9';x.setLineDash([4,4]);x.beginPath();x.moveTo(P+24,cy+26);x.lineTo(P+24,cy+RH-26);x.stroke();x.setLineDash([]);}
+    x.fillStyle=it.bg;x.beginPath();x.arc(P+24,cy,24,0,Math.PI*2);x.fill();
+    x.font=`24px ${F}`;x.textAlign='center';x.fillStyle='#000';x.fillText(it.emoji,P+24,cy+9);x.textAlign='left';
+    x.fillStyle='#1f2328';x.font=`600 19px ${F}`;x.fillText(fitText(x,it.name,W-P*2-64-(it.right?96:0)),P+64,cy-4);
+    x.fillStyle='#6b6f76';x.font=`400 14px ${F}`;x.fillText(fitText(x,it.meta,W-P*2-64),P+64,cy+20);
+    if(it.right){x.textAlign='right';x.fillStyle='#f5a623';x.font=`600 15px ${F}`;x.fillText(it.right,W-P,cy-4);x.textAlign='left';}
+    y+=RH;});
+  if(d.quote){x.fillStyle='#555';x.font=`italic 400 17px ${F}`;x.fillText(fitText(x,'“'+d.quote+'”',W-P*2),P,y+32);y+=56;}
+  // 统计 + 印章
+  y+=12;const bw=W-P*2-150;
+  x.fillStyle='#fff';x.strokeStyle='#ebe7de';x.beginPath();x.roundRect?x.roundRect(P,y,bw,92,14):x.rect(P,y,bw,92);x.fill();x.stroke();
+  d.stats.forEach((s,i)=>{const cx=P+bw/6*(i*2+1);x.textAlign='center';
+    x.fillStyle=i?'#1f2328':C;x.font=`800 24px ${F}`;x.fillText(s[0],cx,y+44);
+    x.fillStyle='#6b6f76';x.font=`400 13px ${F}`;x.fillText(s[1],cx,y+70);});
+  x.save();x.translate(W-P-66,y+46);x.rotate(-0.22);x.globalAlpha=.88;x.strokeStyle=C;x.fillStyle=C;
+  x.lineWidth=4;x.beginPath();x.arc(0,0,60,0,Math.PI*2);x.stroke();
+  x.lineWidth=1.5;x.setLineDash([3,3]);x.beginPath();x.arc(0,0,51,0,Math.PI*2);x.stroke();x.setLineDash([]);
+  x.textAlign='center';x.font=`800 22px ${F}`;x.fillText('已探索',0,-4);x.font=`600 15px ${F}`;x.fillText(d.city+' · 周末',0,20);x.restore();
+  x.textAlign='left';x.fillStyle='#6b6f76';x.font=`400 13px ${F}`;
+  x.fillText(fitText(x,'打开 '+location.host+location.pathname+' 一键套用这条路线',W-P*2-80),P,H-36);
+  x.textAlign='right';x.fillText('by '+d.author,W-P,H-36);x.textAlign='left';
+  return c.toDataURL('image/png');
+}
+function openShare(d,text){let url;try{url=makeCard(d);}catch(e){return copy(text);}window._shareText=text;
+  openSheet(`<div class="sheet-hd"><h2>🪪 分享卡片</h2><button class="x" onclick="closeSheet()">✕</button></div>
+  <img class="share-img" src="${url}" alt="分享卡片"><p class="meta center">手机上长按图片保存，电脑上点「下载图片」</p>
+  <div class="sheet-cta"><a class="btn pri grow" download="周末有方-${esc(d.city)}.png" href="${url}">⬇️ 下载图片</a><button class="btn ghost" onclick="copy(window._shareText)">复制文案</button></div>`);}
 $('#gsort').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.gsort=b.dataset.g;save();renderGuides();};
 
 // ---------- 设计说明 ----------
