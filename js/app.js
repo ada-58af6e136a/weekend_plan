@@ -99,36 +99,39 @@ function renderPlanSheet(){
     const leg=i?`<div class="tl-leg">${l.i} ${l.mode} ${l.min} 分钟${l.cost?' · ¥'+l.cost:''}</div>`:'';
     const warn=s.warn?`<div class="warn"><span>⚠️ ${SLOTS[s.slot].n}${w.i}${w.w}，降水 ${w.rain}%</span><button class="btn sm" onclick="doRain(${i})">换成雨天备选</button></div>`
       :(!a.in&&!meal&&rainy?`<div class="hint">天气有变？<a onclick="doRain(${i})">换成室内备选</a></div>`:'');
-    return leg+`<div class="tl-stop ${s.rain?'swapped':''}"><div class="tl-time">${a.t==='hike'?'08:30':SLOTS[s.slot].s}<small>${SLOTS[s.slot].n}</small></div>
+    const go=i===0?`<div class="tl-leg">🏠 从市中心出发 · ${p.go.i} ${p.go.mode} ${p.go.min} 分钟${p.go.cost?' · ¥'+p.go.cost:''}</div>`:'';
+    const back=i===p.stops.length-1?`<div class="tl-leg">${p.back.i} 返程 ${p.back.min} 分钟${p.back.cost?' · ¥'+p.back.cost:''} · 预计 ${toHM(toMin(s.end)+p.back.min)} 到家</div>`:'';
+    return go+leg+`<div class="tl-stop ${s.rain?'swapped':''}"><div class="tl-time">${s.start}<small>${SLOTS[s.slot].n}</small></div>
       <div class="tl-dot" style="background:${TYPES[a.t][2]}">${TYPES[a.t][1]}</div>
       <div class="tl-body"><div class="row nowrap"><b class="grow">${esc(a.n)}</b>${s.rain?'<span class="tag g">雨天备选</span>':''}</div>
-      <div class="meta">📍${a.area} · ${a.in?'室内':'户外'} · ${money(a.p)}${a.p?'/人':''} · ${a.dur}h${a.book?' · <span class="o">需预约</span>':''}</div>
+      <div class="meta">📍${a.area} · ${a.in?'室内':'户外'} · ${money(a.p)}${a.p?'/人':''} · ${s.start}-${s.end}${a.book?' · <span class="o">需预约</span>':''}</div>
       <div class="meta">💡 ${esc(a.stu)}　${esc(a.desc)}</div>${warn}
-      <div class="tl-ft"><span class="src">来源 · ${a.src}</span><a class="swap" onclick="doSwap(${i})">↻ 换一个</a></div></div></div>`;}).join('');
+      <div class="tl-ft"><span class="src">来源 · ${a.src}</span><a class="swap" onclick="doSwap(${i})">↻ 换一个</a></div></div></div>`+back;}).join('');
   openSheet(`<div class="sheet-hd"><h2>${esc(p.title)}</h2><button class="x" onclick="closeSheet()">✕</button></div>
   <div class="meta">${CITIES[p.city].name} · ${WD[p.day].label} ${WD[p.day].date} · ${p.stops.length} 站 · 约 ${p.hours} 小时 · 匹配度 <b style="color:var(--pri)">${p.match}</b></div>
   <div class="why big">${p.reasons.map(r=>`<div>${r}</div>`).join('')}</div>
   <div class="tl">${tl}</div>
   <div class="card cost"><div class="sec-title"><span>💰 人均花费</span><span>${pr.people} 人合计 ¥${Math.round(p.cost.total*pr.people)}</span></div>
-    <div class="cost-grid"><div><span>门票</span><b>¥${p.cost.ticket}</b></div><div><span>交通</span><b>¥${num(p.cost.transport)}</b></div><div><span>餐饮</span><b>¥${p.cost.food}</b></div><div class="tot"><span>合计</span><b>¥${p.cost.total}</b></div></div>
+    <div class="cost-grid"><div><span>门票</span><b>¥${p.cost.ticket}</b></div><div><span>交通·含往返</span><b>¥${num(p.cost.transport)}</b></div><div><span>餐饮</span><b>¥${p.cost.food}</b></div><div class="tot"><span>合计</span><b>¥${p.cost.total}</b></div></div>
     ${unl?'':`<div class="bbar ${over?'over':''}"><i style="width:${pct}%"></i></div><div class="meta">预算 ¥${pr.budget}/人 · ${over?'超出 ¥'+(p.cost.total-pr.budget)+'，试试「换一个」最贵的那站':'还剩 ¥'+(pr.budget-p.cost.total)}</div>`}</div>
   <div class="sheet-cta">${CUR.ctx==='team'?`<button class="btn pri grow" onclick="closeSheet()">好的</button>`:`<button class="btn pri grow" onclick="teamFromPlan()">👥 发到群里组局</button><button class="btn ghost" onclick="goSolo()">🚶 我自己去</button>`}</div>`,'full');
 }
-function afterEdit(){save();if(CUR.ctx==='home')renderHome();else renderTeams();renderPlanSheet();}
+function afterEdit(){if(CUR.ctx==='team')syncActive(S.teams.find(x=>x.id===CUR.tid));save();if(CUR.ctx==='home')renderHome();else renderTeams();renderPlanSheet();}
 window.doSwap=i=>{const ok=swapStop(CUR.plan,i,curPrefs());toast(ok?`已换成「${short(actOf(CUR.plan.stops[i]))}」，花费已重算`:'这个时段没有别的选择了');afterEdit();};
 window.doRain=i=>{const r=rainSwap(CUR.plan,i,curPrefs());toast(r?`已把「${short(r.from)}」换成室内的「${short(r.to)}」`:'附近没有合适的室内备选');afterEdit();};
 window.goSolo=()=>{S.activePlan={...clone(CUR.plan),with:[]};save();closeSheet();go('checkin');toast('出发！到了每一站记得打卡');};
 
 // ---------- 组局 ----------
 const code=()=>'WK-'+Math.random().toString(36).slice(2,6).toUpperCase();
+// 演示用室友：偏好按方案所在的那天生成，保证能合并出共同时段，并带出两条一票否决
+const roommates=d=>[
+  {name:'小林',pref:{slots:[d+'_pm',d+'_eve',(1-d)+'_pm'],budget:150,likes:['exhibit','food'],avoid:['hike']}},
+  {name:'阿杰',pref:{slots:[d+'_pm',(1-d)+'_am',(1-d)+'_pm'],budget:100,likes:['show','food'],avoid:['queue']}},
+  {name:'Mia',pref:{slots:[d+'_am',d+'_pm'],budget:200,likes:['exhibit','market','walk'],avoid:[]}}];
 function presetTeam(){
   return {id:'t305',code:'WK-305A',name:'305 宿舍周末局',preset:true,status:'collecting',
     plan:planFromStops(['sh6','sh18','sh9','sh3'],{...DEF_PREFS},'雨天室内一日游（小林转发的攻略）'),diff:null,sig:null,
-    members:[
-      {name:'小林',filled:true,pref:{slots:['0_pm','0_eve','1_pm'],budget:150,likes:['exhibit','food'],avoid:['hike']}},
-      {name:'阿杰',filled:true,pref:{slots:['0_pm','1_am','1_pm','1_eve'],budget:100,likes:['show','food'],avoid:['queue']}},
-      {name:'Mia',filled:true,pref:{slots:['0_am','0_pm'],budget:200,likes:['exhibit','market','walk'],avoid:[]}},
-      {name:'我',filled:false,pref:null}]};
+    members:[...roommates(0).map(r=>({name:r.name,filled:true,pref:r.pref})),{name:'我',filled:false,pref:null}]};
 }
 const MOCKS=[
   {name:'周周',pref:{slots:['0_pm','1_pm','1_eve'],budget:120,likes:['market','food'],avoid:['early']}},
@@ -136,15 +139,27 @@ const MOCKS=[
   {name:'Coco',pref:{slots:['1_am','1_pm'],budget:80,likes:['exhibit','walk'],avoid:['queue']}}];
 const myDefaultPref=day=>({slots:[day+'_pm',day+'_eve'],budget:Math.min(S.prefs.budget,UNLIMITED),likes:[...S.prefs.likes],avoid:[...S.prefs.avoid]});
 
-window.teamFromPlan=()=>{const p=clone(CUR.plan);
-  const t={id:Date.now()+'',code:code(),name:WD[p.day].label+(TYPES[actOf(p.stops.find(s=>!SLOTS[s.slot].meal)||p.stops[0]).t][0])+'小分队',status:'collecting',plan:p,diff:null,sig:null,
-    members:[{name:'我',filled:true,pref:{...myDefaultPref(p.day),slots:[...new Set(p.stops.filter(s=>!SLOTS[s.slot].meal).map(s=>p.day+'_'+s.slot))]}}]};
-  S.teams.unshift(t);save();closeSheet();go('team');toast('局已创建，复制邀请发到群里吧');};
+// 从方案发起组局：我的偏好取自当前条件，室友在群里陆续填写（演示）
+window.teamFromPlan=()=>{const p=clone(CUR.plan),main=p.stops.filter(s=>!SLOTS[s.slot].meal);
+  const t={id:Date.now()+'',code:code(),name:'305 宿舍 · '+WD[p.day].label+TYPES[actOf(main[0]||p.stops[0]).t][0]+'局',status:'collecting',plan:p,diff:null,sig:null,
+    members:[{name:'我',filled:true,pref:{...myDefaultPref(p.day),slots:[...new Set(main.map(s=>p.day+'_'+s.slot))]}},
+      ...roommates(p.day).map(r=>({name:r.name,filled:false,pref:null}))]};
+  S.teams.unshift(t);save();closeSheet();go('team');toast('已发到「305 宿舍」群，等室友填偏好…');replies(t.id);};
+function replies(tid){const t=S.teams.find(x=>x.id===tid);if(!t)return;
+  const m=t.members.find(x=>!x.filled&&x.name!=='我');
+  if(!m){const el=document.querySelector(`#team-${tid} .merge`);el&&el.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  setTimeout(()=>{if(!S.teams.includes(t)||m.filled)return;
+    m.filled=true;m.pref=clone(roommates(t.plan.day).find(x=>x.name===m.name).pref);save();
+    if($('#v-team').classList.contains('on'))renderTeams();toast(m.name+' 填好了偏好');replies(tid);},900);}
+// 局里的方案变了：同步足迹里的进行中方案
+function syncActive(t){const a=S.activePlan;
+  if(a&&(a.tid===t.id||(!a.tid&&a.team===t.name))){S.activePlan={...clone(t.plan),team:t.name,tid:t.id,with:t.members.filter(x=>x.name!=='我').map(x=>x.name)};return true;}
+  return false;}
 
 function prefSummary(p){return `${p.slots.map(skLabel).join('、')} · ${p.budget>=UNLIMITED?'预算不限':'≤¥'+p.budget} · ${p.likes.map(t=>TYPES[t][0]).join('/')}${p.avoid.length?' · 🚫'+p.avoid.map(k=>AVOIDS[k]).join('/'):''}`;}
 function memberRow(t,m){
   return `<div class="mrow">${avatar(m.name)}<div class="grow"><b>${esc(m.name)}</b>${m.filled?`<div class="meta">${prefSummary(m.pref)}</div>`:''}</div>
-  ${m.filled?(m.name==='我'?`<a class="meta" onclick="fillPref('${t.id}')">修改</a>`:'<span class="ok">✓ 已填</span>'):(m.name==='我'?`<button class="btn sm pri pulse" onclick="fillPref('${t.id}')">填写我的偏好 · 10秒</button>`:'<span class="meta">⏳ 待填写</span>')}</div>`;
+  ${m.filled?(m.name==='我'?`<a class="meta" onclick="fillPref('${t.id}')">修改</a>`:'<span class="ok">✓ 已填</span>'):(m.name==='我'?`<button class="btn sm pri pulse" onclick="fillPref('${t.id}')">填写我的偏好 · 10秒</button>`:'<span class="meta">⏳ 填写中…</span>')}</div>`;
 }
 function mergeBox(t,m,stale){
   return `<div class="merge"><div class="mh">🤝 偏好合并结果 <span class="meta">${m.n}/${m.total} 人已填</span></div>
@@ -169,8 +184,8 @@ function teamCard(t){
   <div class="tplan" onclick="openTeamPlan('${t.id}')"><div class="meta">当前方案 · ${WD[p.day].label} ${WD[p.day].date}</div><b>${esc(p.title)}</b><div class="route">${routeLine(p)}</div><div class="meta">人均 ¥${p.cost.total} · 约 ${p.hours} 小时 · 点击查看路线 ›</div></div>
   <div class="sec-title" style="margin-top:12px">👥 成员偏好</div>${t.members.map(x=>memberRow(t,x)).join('')}
   ${m&&m.n>=2?mergeBox(t,m,stale):''}${t.diff?diffBox(t.diff):''}
-  <div class="why">📍 集合：${fa.area} ${fa.t==='hike'?'08:30':SLOTS[first.slot].s}（提前 10 分钟到）💰 AA 人均 ¥${p.cost.total}，${n} 人共 ¥${p.cost.total*n}　${wxNote}</div>
-  <div class="acts"><button class="btn sm pri" onclick="invite('${t.id}')">📤 复制邀请</button>${t.status!=='confirmed'?`<button class="btn sm" onclick="confirmTeam('${t.id}')">✅ 确认出发</button>`:''}${t.preset?'':`${MOCKS.some(x=>!t.members.find(y=>y.name===x.name))?`<button class="btn sm ghost" onclick="mockFill('${t.id}')">＋ 演示：同学填写</button>`:''}<button class="btn sm ghost" onclick="delTeam('${t.id}')">删除</button>`}</div></div>`;
+  <div class="why">📍 集合：${fa.area} ${first.start}（提前 10 分钟到）💰 AA 人均 ¥${p.cost.total}，${n} 人共 ¥${p.cost.total*n}　${wxNote}</div>
+  <div class="acts"><button class="btn sm pri" onclick="invite('${t.id}')">📤 复制邀请</button>${t.status!=='confirmed'?`<button class="btn sm" onclick="confirmTeam('${t.id}')">✅ 确认出发</button>`:''}${t.preset?'':`${t.members.some(x=>!x.filled&&x.name!=='我')||MOCKS.some(x=>!t.members.find(y=>y.name===x.name))?`<button class="btn sm ghost" onclick="mockFill('${t.id}')">＋ 演示：同学填写</button>`:''}<button class="btn sm ghost" onclick="delTeam('${t.id}')">删除</button>`}</div></div>`;
 }
 function renderTeams(){
   $('#teams').innerHTML=S.teams.length?S.teams.map(teamCard).join(''):`<div class="card empty">还没有局<br><br><button class="btn pri" onclick="go('plan')">去挑一个方案</button></div>`;
@@ -191,14 +206,17 @@ window.submitPref=()=>{const p=window._fp;if(!p.slots.length)return toast('至�
   toast('已提交，看看大家的合并结果');setTimeout(()=>{const el=document.querySelector(`#team-${t.id} .merge`);el&&el.scrollIntoView({behavior:'smooth',block:'center'});},120);};
 window.regenTeam=tid=>{const t=S.teams.find(x=>x.id===tid),m=mergePrefs(t.members,t.plan.city);
   const ps=generatePlans(m.prefs);if(!ps.length)return toast('全员条件下找不到方案，试试让大家放宽一点');
-  const np=ps[0];t.diff=planDiff(t.plan,np,m);t.plan=np;t.sig=JSON.stringify(m.prefs);save();renderTeams();toast('已按全员偏好更新方案');
+  const np=ps[0];t.diff=planDiff(t.plan,np,m);t.plan=np;t.sig=JSON.stringify(m.prefs);const synced=syncActive(t);save();renderTeams();
+  toast(synced?'已更新方案，足迹里的进行中方案已同步':'已按全员偏好更新方案');
   setTimeout(()=>{const el=document.querySelector(`#team-${t.id} .diff`);el&&el.scrollIntoView({behavior:'smooth',block:'center'});},120);};
-window.mockFill=tid=>{const t=S.teams.find(x=>x.id===tid),m=MOCKS.find(x=>!t.members.find(y=>y.name===x.name));if(!m)return;
+window.mockFill=tid=>{const t=S.teams.find(x=>x.id===tid),u=t.members.find(x=>!x.filled&&x.name!=='我');
+  if(u){const r=roommates(t.plan.day).find(x=>x.name===u.name)||MOCKS[0];u.filled=true;u.pref=clone(r.pref);save();renderTeams();return toast(u.name+' 填好了偏好');}
+  const m=MOCKS.find(x=>!t.members.find(y=>y.name===x.name));if(!m)return;
   t.members.push({name:m.name,filled:true,pref:clone(m.pref)});save();renderTeams();toast(m.name+' 填好了偏好');};
 window.invite=tid=>{const t=S.teams.find(x=>x.id===tid),p=t.plan,left=t.members.filter(x=>!x.filled).map(x=>x.name);
   copy(`【周末组局】${t.name}\n方案：${p.title}\n路线：${p.stops.map(s=>actOf(s).n).join(' → ')}\n时间：${WD[p.day].label} ${WD[p.day].date}\n人均：¥${p.cost.total}（含门票交通餐饮）\n${left.length?'还差 '+left.join('、')+' 没填偏好，':''}点链接 10 秒填偏好，系统自动合并👇\n${location.href.split('#')[0]}#join/${t.code}`);};
 window.confirmTeam=tid=>{const t=S.teams.find(x=>x.id===tid);t.status='confirmed';
-  S.activePlan={...clone(t.plan),team:t.name,with:t.members.filter(x=>x.name!=='我').map(x=>x.name)};save();go('checkin');toast('已确认出发！到了每一站记得打卡');};
+  S.activePlan={...clone(t.plan),team:t.name,tid:t.id,with:t.members.filter(x=>x.name!=='我').map(x=>x.name)};save();go('checkin');toast('已确认出发！到了每一站记得打卡');};
 window.delTeam=tid=>{S.teams=S.teams.filter(x=>x.id!==tid);save();renderTeams();};
 function joinByCode(c){c=c.trim().toUpperCase();if(!c)return toast('请输入邀请码');
   let t=S.teams.find(x=>x.code===c);
@@ -210,8 +228,10 @@ function joinByCode(c){c=c.trim().toUpperCase();if(!c)return toast('请输入邀
 $('#joinBtn').onclick=()=>joinByCode($('#joinCode').value);
 
 // ---------- 足迹：打卡 ----------
-const doneIn=(plan,aid)=>S.checks.some(c=>c.planId===plan.id&&c.aid===aid);
-window.checkIn=(aid,planId)=>{const a=aid?(aid==='meal'?MEAL:findAct(aid)):null;
+// 按站序号判断是否已打卡：同一方案里可能有两个「附近简餐」（旧记录没有序号时按活动 id 兜底）
+const doneIn=(plan,i)=>S.checks.some(c=>c.planId===plan.id&&(c.stopIdx===i||(c.stopIdx==null&&c.aid===plan.stops[i].aid)));
+window.checkIn=(aid,planId,idx)=>{const ap0=S.activePlan&&S.activePlan.id===planId?S.activePlan:null;
+  const a=ap0&&idx!=null?actOf(ap0.stops[idx]):aid?findAct(aid):null;
   openSheet(`<div class="sheet-hd"><h2>📍 打卡${a?' · '+esc(a.n):''}</h2><button class="x" onclick="closeSheet()">✕</button></div>
   ${a?'':`<div class="field"><label>地点 / 活动名</label><input id="cName" placeholder="比如：外滩夜景"></div><div class="field"><label>类型</label><select id="cType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v[1]} ${v[0]}</option>`).join('')}</select></div>`}
   <div class="field"><label>评分</label><div class="chips" id="cStar">${[1,2,3,4,5].map(i=>`<span class="chip ${i===5?'on':''}" data-v="${i}">${'★'.repeat(i)}</span>`).join('')}</div></div>
@@ -222,7 +242,7 @@ window.checkIn=(aid,planId)=>{const a=aid?(aid==='meal'?MEAL:findAct(aid)):null;
   document.querySelectorAll('#cStar .chip').forEach(c=>c.onclick=()=>{document.querySelectorAll('#cStar .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');});
   $('#cSave').onclick=()=>{const f=$('#cPic').files[0];const done=pic=>{
     const ap=S.activePlan&&S.activePlan.id===planId?S.activePlan:null;
-    const rec={id:Date.now()+'',planId:planId||null,aid:aid||null,name:a?a.n:($('#cName').value||'未命名地点'),type:a?a.t:$('#cType').value,city:ap?ap.city:S.prefs.city,area:a?a.area:'',
+    const rec={id:Date.now()+'',planId:planId||null,stopIdx:idx==null?null:idx,aid:aid||null,name:a?a.n:($('#cName').value||'未命名地点'),type:a?a.t:$('#cType').value,city:ap?ap.city:S.prefs.city,area:a?a.area:'',
       star:+document.querySelector('#cStar .chip.on').dataset.v,cost:+$('#cCost').value||0,note:$('#cNote').value.trim(),pic,with:ap?ap.with:[],date:new Date().toLocaleDateString('zh-CN')};
     S.checks.unshift(rec);save();closeSheet();go('checkin');stampFx(rec);};
    if(f){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas'),k=240/Math.max(img.width,img.height);c.width=img.width*k;c.height=img.height*k;c.getContext('2d').drawImage(img,0,0,c.width,c.height);done(c.toDataURL('image/jpeg',.7));};img.src=r.result;};r.readAsDataURL(f);}else done(null);};
@@ -232,10 +252,10 @@ function stampFx(rec){const el=$('#stampfx');el.innerHTML=stampHTML(rec,true)+`<
 const BADGES=[['first','🌱 第一次出发',s=>s.checks.length>=1],['art','🖼️ 看展达人',s=>s.checks.filter(c=>c.type==='exhibit').length>=2],['hike','🥾 徒步小将',s=>s.checks.some(c=>c.type==='hike')],['cheap','💸 穷游大师',s=>s.checks.filter(c=>c.cost===0).length>=2],['team','👥 组局王',s=>s.checks.some(c=>c.with&&c.with.length>=2)],['all','🗺️ 全能探索家',s=>new Set(s.checks.map(c=>c.type)).size>=4]];
 function renderCheckin(){
   const ap=S.activePlan,c=S.checks;
-  if(ap){const done=ap.stops.filter(s=>doneIn(ap,s.aid)).length,all=done===ap.stops.length;
+  if(ap){const done=ap.stops.filter((s,i)=>doneIn(ap,i)).length,all=done===ap.stops.length;
     $('#active').innerHTML=`<div class="card active"><div class="row nowrap"><div class="grow"><div class="meta">${ap.team?esc(ap.team)+' · ':''}进行中的方案 · ${WD[ap.day].label}</div><h3>${esc(ap.title)}</h3></div><div class="score"><b>${done}/${ap.stops.length}</b><div>已打卡</div></div></div>
     <div class="bar"><i style="width:${done/ap.stops.length*100}%"></i></div>
-    ${ap.stops.map(s=>{const a=actOf(s),d=doneIn(ap,s.aid);return `<div class="astop ${d?'done':''}"><span class="t">${SLOTS[s.slot].s}</span><span>${TYPES[a.t][1]}</span><span class="grow">${esc(a.n)}</span>${d?'<span class="ok">✓ 已盖章</span>':`<button class="btn sm pri" onclick="checkIn('${s.aid}','${ap.id}')">打卡</button>`}</div>`;}).join('')}
+    ${ap.stops.map((s,i)=>{const a=actOf(s),d=doneIn(ap,i);return `<div class="astop ${d?'done':''}"><span class="t">${s.start}</span><span>${TYPES[a.t][1]}</span><span class="grow">${esc(a.n)}</span>${d?'<span class="ok">✓ 已盖章</span>':`<button class="btn sm pri" onclick="checkIn('${s.aid}','${ap.id}',${i})">打卡</button>`}</div>`;}).join('')}
     ${all?`<div class="acts"><button class="btn pri grow" onclick="go('guide');genGuide()">🎉 全部完成，一键生成攻略</button></div>`:`<div class="acts"><a class="meta" onclick="endPlan()">结束这个方案</a></div>`}</div>`;
   }else $('#active').innerHTML=`<div class="card empty">还没有进行中的方案<br><br><button class="btn pri" onclick="go('plan')">去选一个方案出发</button></div>`;
   const spent=c.reduce((x,y)=>x+y.cost,0);
@@ -278,7 +298,7 @@ window.genGuide=()=>{const ap=S.activePlan;
   <div class="sheet-cta"><button class="btn pri grow" id="gPub">发布到同城攻略</button><button class="btn ghost" id="gCopy">复制文案</button></div>`);
   $('#gCopy').onclick=()=>copy($('#gT').value+'\n\n'+$('#gB').value+'\n\n'+types.map(t=>'#'+t).join(' '));
   $('#gPub').onclick=()=>{const G=window._g;S.myGuides.unshift({id:'m'+Date.now(),city:G.city,au:'我',title:$('#gT').value,body:$('#gB').value,stops:G.stops,likes:0,t:0,tags:[...G.types,CITIES[G.city].name],mine:true});
-    S.prefs.city=G.city;save();closeSheet();renderGuides();toast('已发布，同城同学可以一键套用你的路线');};
+    S.prefs.city=G.city;regen();save();closeSheet();renderGuides();toast('已发布，同城同学可以一键套用你的路线');};
 };
 $('#genGuide').onclick=()=>genGuide();
 $('#gsort').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.gsort=b.dataset.g;save();renderGuides();};
@@ -297,6 +317,10 @@ function route(){const h=location.hash.slice(1);
   VIEWS.forEach(x=>$('#v-'+x).classList.toggle('on',x===v));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===v));
   ({plan:renderHome,team:renderTeams,checkin:renderCheckin,guide:renderGuides})[v]();$('#app').scrollTo?$('#app').scrollTo(0,0):0;window.scrollTo(0,0);}
 window.addEventListener('hashchange',route);
+
+// 兼容：早先保存的方案快照没有起止时间和往返交通，加载时补算
+const upgrade=p=>{if(p&&p.stops&&p.stops.length&&!p.stops[0].start)recalc(p,{...DEF_PREFS,city:p.city,day:p.day});};
+S.teams.forEach(t=>upgrade(t.plan));upgrade(S.activePlan);
 
 // 首次访问：预置演示数据
 if(!S.seeded){
