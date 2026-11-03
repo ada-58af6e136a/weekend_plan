@@ -90,11 +90,13 @@ const ACTS=[
 const GUIDES=[
  {id:'g1',city:'sh',au:'小鹿',title:'雨天也不怕！上海室内一日游（人均 ¥150）',body:'上午 上博东馆 → 中午 苏州河咖啡 → 下午 M50 画廊 → 晚上 Livehouse。全程室内，不用打伞走多久。',stops:['sh6','sh18','sh9','sh3'],likes:328,t:3,tags:['雨天','室内']},
  {id:'g2',city:'sh',au:'阿北',title:'4 人 0 元梧桐 City Walk 路线',body:'武康大楼 → 安福路 → 巨鹿路 → 富民路，3 小时，拍照点已标好。午饭吃生煎。',stops:['sh5','sh19','sh17'],likes:512,t:6,tags:['免费','拍照','4人']},
- {id:'g3',city:'sh',au:'Momo',title:'佘山徒步新手攻略：装备、路线、回程',body:'9 号线佘山站出发，西佘山上东佘山下，再去天马山。带水 1L、运动鞋即可。',stops:['sh4','sh21'],likes:206,t:10,tags:['徒步','新手']},
+ {id:'g3',city:'sh',au:'Momo',title:'佘山徒步新手攻略：装备、路线、回程',body:'9 号线佘山站出发，西佘山上东佘山下，再去天马山。带水 1L、运动鞋即可。下山坐 9 号线回市区，云南南路吃顿热乎的。',stops:['sh4','sh21'],likes:206,t:10,tags:['徒步','新手']},
  {id:'g4',city:'bj',au:'Kiki',title:'香山红叶避人流指南',body:'7 点前进北门，走红叶路线到香炉峰，下山去五道口吃饭。',stops:['bj2','bj9'],likes:440,t:2,tags:['徒步','早起']},
  {id:'g5',city:'bj',au:'大橘',title:'胡同 City Walk + 相声，北京味儿的一天',body:'白天鼓楼胡同，晚上前门相声，人均 ¥150。',stops:['bj3','bj8','bj4'],likes:198,t:8,tags:['City Walk','演出']},
  {id:'g6',city:'hz',au:'阿禾',title:'九溪徒步 + 龙井喝茶，杭州最舒服的周末',body:'九溪烟树出发，沿溪走到龙井村，农家喝茶吃饭，人均 ¥80。',stops:['hz1','hz8','hz2'],likes:367,t:4,tags:['徒步','喝茶']},
- {id:'g7',city:'hz',au:'Leo',title:'运河坐水上巴士 ¥3 看杭州',body:'武林门码头上船，到小河直街下船逛老街，晚上逛运河夜市。',stops:['hz3','hz6','hz10'],likes:150,t:12,tags:['穷游','City Walk']}
+ {id:'g7',city:'hz',au:'Leo',title:'运河坐水上巴士 ¥3 看杭州',body:'武林门码头上船，到小河直街下船逛老街，晚上逛运河夜市。',stops:['hz3','hz6','hz10'],likes:150,t:12,tags:['穷游','City Walk']},
+ {id:'g8',city:'bj',au:'阿夏',title:'国博 + 胡同 + 簋街，东城一日不用跑远',body:'上午国博看常设展（提前 7 天预约），中午前门吃卤煮，下午逛鼓楼胡同，晚上 4 个人去簋街吃小龙虾。全程都在东城和西城交界。',stops:['bj7','bj8','bj3','bj6'],likes:126,t:5,tags:['看展','City Walk','4人']},
+ {id:'g9',city:'hz',au:'小满',title:'美院 + 浙美双展连看，0 元文艺一日',body:'上午美院毕业展，中午西湖边吃片儿川，下午走到浙江美术馆。两个展都免费，浙美记得提前预约。',stops:['hz2','hz8','hz7'],likes:233,t:7,tags:['免费','看展']}
 ];
 
 const NAMES=['我','小林','阿杰','Mia','周周','大壮','Coco','Leo'];
