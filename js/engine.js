@@ -74,6 +74,9 @@ function candidates(slot,prefs,opt={}){
       &&(meal?a.t==='food':a.t!=='food')&&(!opt.types||opt.types.includes(a.t))&&(!opt.indoor||meal||a.in))
     .map(a=>{let s=stopScore(a,slot,prefs,opt.theme)-(opt.seen&&opt.seen[a.id]||0)*(meal?8:18);
       if(opt.prevArea){const l=legOf(prefs.city,opt.prevArea,a.area);s-=l.min/4;if(prefs.avoid.includes('far')&&l.min>40)s-=999;}
+      // 替换已有方案中的一站时：也要顺路去下一站，且尽量不让总价超预算
+      if(opt.nextArea)s-=legOf(prefs.city,a.area,opt.nextArea).min/4;
+      if(opt.costBase!=null&&prefs.budget<UNLIMITED){const over=opt.costBase+a.p-prefs.budget;if(over>0)s-=over/2;}
       return {a,s};})
     .filter(x=>x.s>-500).sort((x,y)=>y.s-x.s);
 }
@@ -203,9 +206,9 @@ function generatePlans(prefs){
 
 // 换一站：同时段按得分轮换
 function swapStop(plan,i,prefs){
-  const s=plan.stops[i],prev=i?plan.stops[i-1].area:null;
+  const s=plan.stops[i],prev=i?plan.stops[i-1].area:null,nx=plan.stops[i+1];
   const used=new Set(plan.stops.filter((_,j)=>j!==i).map(x=>x.aid));
-  const c=candidates(s.slot,prefs,{used,prevArea:prev});
+  const c=candidates(s.slot,prefs,{used,prevArea:prev,nextArea:nx&&nx.area,costBase:plan.cost.total-actOf(s).p});
   if(c.length<2&&c.length&&c[0].a.id===s.aid)return false;
   if(!c.length)return false;
   const k=c.findIndex(x=>x.a.id===s.aid);
@@ -216,9 +219,9 @@ function swapStop(plan,i,prefs){
 
 // 雨天备选：同时段最合适的室内活动
 function rainSwap(plan,i,prefs){
-  const s=plan.stops[i],prev=i?plan.stops[i-1].area:null;
+  const s=plan.stops[i],prev=i?plan.stops[i-1].area:null,nx=plan.stops[i+1];
   const used=new Set(plan.stops.map(x=>x.aid));
-  const c=candidates(s.slot,{...prefs,avoid:prefs.avoid.filter(x=>x!=='outdoor')},{used,indoor:true,prevArea:prev});
+  const c=candidates(s.slot,{...prefs,avoid:prefs.avoid.filter(x=>x!=='outdoor')},{used,indoor:true,prevArea:prev,nextArea:nx&&nx.area,costBase:plan.cost.total-actOf(s).p});
   if(!c.length)return null;
   const old=actOf(s),a=c[0].a;
   Object.assign(s,{aid:a.id,area:a.area,rain:true});
@@ -246,13 +249,14 @@ function mergePrefs(members,city){
   if(!common.length){const mx=Math.max(...SLOT_KEYS.map(cnt));common=mx?SLOT_KEYS.filter(k=>cnt(k)===mx):[];partial=true;}
   const day=[0,1].sort((a,b)=>common.filter(k=>+k[0]===b).length-common.filter(k=>+k[0]===a).length)[0];
   const slots=common.filter(k=>+k[0]===day).map(k=>k.split('_')[1]);
+  const cover=Math.max(...SLOT_KEYS.map(cnt));
   const absent=partial?ms.filter(m=>!slots.some(s=>m.pref.slots.includes(day+'_'+s))).map(m=>m.name):[];
   const budget=Math.min(...ms.map(m=>m.pref.budget)),poorest=ms.find(m=>m.pref.budget===budget).name;
   const v={};ms.forEach(m=>m.pref.likes.forEach(t=>v[t]=(v[t]||0)+1));
   const votes=Object.entries(v).sort((a,b)=>b[1]-a[1]);
   let likes=votes.filter(x=>x[1]>=2).map(x=>x[0]);if(!likes.length)likes=votes.slice(0,2).map(x=>x[0]);
   const avoid=[];ms.forEach(m=>m.pref.avoid.forEach(k=>{const f=avoid.find(x=>x.k===k);f?f.by.push(m.name):avoid.push({k,by:[m.name]});}));
-  return {n:ms.length,total:members.length,day,slots,absent,partial,budget,poorest,votes,avoid,
+  return {n:ms.length,total:members.length,day,slots,absent,partial,cover,budget,poorest,votes,avoid,
     prefs:{city,day,people:members.length,budget,likes,avoid:avoid.map(x=>x.k),slots:slots.length?slots:null}};
 }
 
