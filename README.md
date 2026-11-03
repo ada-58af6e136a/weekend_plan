@@ -5,7 +5,7 @@
 > 打开就有这周末能直接出发的方案，转发到群里就能定下来。
 > 电脑和手机都可以打开，无需登录或安装。
 
-![首页：天气、条件与 3 套方案](docs/screenshots/home.png)
+[![首页：天气、条件与 3 套方案](https://ada-58af6e136a.github.io/weekend_plan/docs/screenshots/home.png)](https://ada-58af6e136a.github.io/weekend_plan/)
 
 ## 30 秒体验路径
 
@@ -13,7 +13,7 @@
 2. **组局合并**：点“发到群里组局”，室友依次填好偏好。系统自动合并：时间取交集，预算按最低的人算，每个人“不想要”的一票否决。然后按全员偏好重新生成方案，逐条说明换掉了哪站、为什么。
 3. **打卡 → 攻略**：确认出发后按站打卡盖章，全部完成后一键生成攻略和护照风分享卡片。发布后，同城同学可以一键把这条路线套用为自己的方案。
 
-![组局：偏好合并与方案差异说明](docs/screenshots/team.png)
+[![组局：偏好合并与方案差异说明](https://ada-58af6e136a.github.io/weekend_plan/docs/screenshots/team.png)](https://ada-58af6e136a.github.io/weekend_plan/)
 
 ## 痛点 → 设计
 
